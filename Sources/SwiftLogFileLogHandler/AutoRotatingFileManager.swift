@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Compression
 
 final class AutoRotatingFileManager: @unchecked Sendable {
     
@@ -17,6 +18,9 @@ final class AutoRotatingFileManager: @unchecked Sendable {
     
     /// File handle for the log file
     private var logFileHandle: FileHandle? = nil
+    
+    /// URL of the combined archive file
+    private var combinedArchiveFileURL: URL? = nil
     
     /// FileURL of the file to log to
     internal var currentLogFileURL: URL? = nil {
@@ -159,7 +163,55 @@ final class AutoRotatingFileManager: @unchecked Sendable {
         }
     }
     
+   /// Combines all archived log files into a single file and returns its URL.
+   ///
+   /// - Returns: The URL of the combined archive file, or `nil` if the operation fails.
+   public func combineArchivedLogFiles() -> URL? {
+       let archivedLogFiles = archivedLogFileURLs()
+
+       guard !archivedLogFiles.isEmpty else {
+           return nil
+       }
+
+       let combinedFileName = "\(baseFileName)_combined_archive.\(fileExtension)"
+       let combinedFileURL = Self.defaultLogFolderURL.appendingPathComponent(combinedFileName)
+
+       let fileManager = FileManager.default
+       if fileManager.fileExists(atPath: combinedFileURL.path) {
+           try? fileManager.removeItem(at: combinedFileURL)
+       }
+
+       do {
+           for fileURL in archivedLogFiles {
+               let fileContents = try String(contentsOf: fileURL)
+               try fileContents.appendLine(to: combinedFileURL)
+           }
+       } catch {
+           print("Error combining archived log files: \(error)")
+           return nil
+       }
+
+       combinedArchiveFileURL = combinedFileURL
+       return combinedFileURL
+   }
+
+   /// Clears the combined archive file from memory.
+   public func clearCombinedArchive() {
+       guard let combinedArchiveFileURL = combinedArchiveFileURL else { return }
+
+       let fileManager = FileManager.default
+       
+       do {
+           try fileManager.removeItem(at: combinedArchiveFileURL)
+       } catch {
+           print("Error clearing combined archive: \(error)")
+       }
+
+       self.combinedArchiveFileURL = nil
+   }
+    
     // MARK: - Internal Methods
+    
     /// Write the log to the log file.
     ///
     /// - Parameters:
@@ -175,7 +227,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
                 try logFileHandle?.seekToEnd()
                 try logFileHandle?.write(contentsOf: encodedData)
             } catch {
-                
+                print("Error writing to log file: \(error)")
             }
         }
 

@@ -37,4 +37,12 @@ public struct SwiftLogFileLogHandler: LogHandler {
                     line: UInt = #line) {
         fileLoggerManager.logToFile("\(message)")
     }
+    
+    public func getArchiveURL() -> URL? {
+        fileLoggerManager.combineArchivedLogFiles()
+    }
+    
+    public func clearArchivedLogFiles() {
+        fileLoggerManager.clearCombinedArchive()
+    }
 }
