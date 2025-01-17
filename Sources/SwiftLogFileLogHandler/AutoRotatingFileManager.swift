@@ -7,6 +7,9 @@
 
 import Foundation
 import Compression
+import OSLog
+
+let logger = Logger(subsystem: "SwiftLogFileLogHandler", category: "file-handling")
 
 final class AutoRotatingFileManager: @unchecked Sendable {
     
@@ -104,7 +107,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
         currentLogFile: Any? = nil,
         logFileHandle: FileHandle? = nil,
         maxFileSize: UInt64 = autoRotatingFileDefaultMaxFileSize,
-        targetMaxLogFiles: UInt64 = autoRotatingFileDefaultMaxFileSize
+        targetMaxLogFiles: UInt64 = 10
     ) {
         self.logFileHandle = logFileHandle
         self.targetMaxFileSize = maxFileSize < 1 ? .max : maxFileSize
@@ -150,7 +153,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
             let fileAttributes = try FileManager.default.attributesOfItem(atPath: filePath)
             return fileAttributes[.size] as? UInt64 ?? 0
         } catch {
-            // Handle error or log it
+            logger.error("Error fetching curren log file size \(error.localizedDescription)")
             return 0
         }
     }
@@ -187,7 +190,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
                try fileContents.appendLine(to: combinedFileURL)
            }
        } catch {
-           print("Error combining archived log files: \(error)")
+           logger.error("Error combining archived log files: \(error.localizedDescription)")
            return nil
        }
 
@@ -204,7 +207,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
        do {
            try fileManager.removeItem(at: combinedArchiveFileURL)
        } catch {
-           print("Error clearing combined archive: \(error)")
+           logger.error("Error clearing combined archive: \(error.localizedDescription)")
        }
 
        self.combinedArchiveFileURL = nil
@@ -227,7 +230,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
                 try logFileHandle?.seekToEnd()
                 try logFileHandle?.write(contentsOf: encodedData)
             } catch {
-                print("Error writing to log file: \(error)")
+                logger.error("Error writing to log file: \(error.localizedDescription)")
             }
         }
 
@@ -291,7 +294,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
                 try fileManager.removeItem(at: archivedLogFileURL)
             }
             catch {
-//                owner?._logln("Unable to delete old archived log file \(archivedFileURL.path): \(error.localizedDescription)", level: .error)
+                logger.error("Unable to delete old archived log file \(archivedLogFileURL.path): \(error.localizedDescription)")
             }
         }
     }
@@ -304,7 +307,6 @@ final class AutoRotatingFileManager: @unchecked Sendable {
         // Do not rotate until critical setup has been completed so that we do not accidentally rotate once to the defaultLogFolderURL before determining the desired log location
         guard let _ = archivedLogsFolderURL else { return false }
         
-        // File Size
         guard currentLogFileSize < targetMaxFileSize else { return true }
 
         return false
@@ -318,7 +320,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
                 try fileManager.removeItem(at: archivedLogFileURL)
             }
             catch {
-//                owner?._logln("Unable to delete old archived log file \(archivedLogFileURLs.path): \(error.localizedDescription)", level: .error)
+                logger.error("Unable to delete old archived log file \(archivedLogFileURL.path): \(error.localizedDescription)")
             }
         }
     }
@@ -345,27 +347,18 @@ final class AutoRotatingFileManager: @unchecked Sendable {
                 write(message: "\(appendMarker)\n")
             }
         } catch {
-            //        owner._logln("Attempt to open log file for \(action) failed: \(error.localizedDescription)", level: .error, source: self)
+            logger.error("Attempt to open log file failed: \(error.localizedDescription)")
             logFileHandle = nil
             return
         }
 
-//        owner.logAppDetails(selectedDestination: self)
         logOpeningDetails(fileExists: fileExists)
     }
 
     internal func logOpeningDetails(fileExists: Bool) {
         guard let currentLogFileURL = currentLogFileURL else { return }
-
-//        let mode = fileExists ? "appending" : "writing"
-//        let logMessage = "XCGLogger \(mode) log to: \(currentLogFileURL.absoluteString)"
-//        let logDetails = LogDetails(level: .info, date: Date(), message: logMessage, functionName: "", fileName: "", lineNumber: 0, userInfo: XCGLogger.Constants.internalUserInfo)
-        print("XCGLoggerlog to: \(currentLogFileURL.absoluteString)")
-        //owner._logln(logDetails.message, level: logDetails.level, source: self)
-
-//        if owner.destination(withIdentifier: identifier) == nil {
-//            processInternal(logDetails: logDetails)
-//        }
+        
+        logger.info("SwiftLogFileLogHandler opened log file at: \(currentLogFileURL.absoluteString)")
     }
     
     @discardableResult
@@ -376,7 +369,6 @@ final class AutoRotatingFileManager: @unchecked Sendable {
 
         let fileManager = FileManager.default
 
-        // Check if the destination file already exists
         guard !fileManager.fileExists(atPath: archiveToFileURL.path) else { return false }
 
         closeFile()
@@ -385,11 +377,11 @@ final class AutoRotatingFileManager: @unchecked Sendable {
             try fileManager.moveItem(atPath: currentLogFileURL.path, toPath: archiveToFileURL.path)
         } catch {
             openFile()
-//            owner?._logln("Unable to rotate file \(sourcePath) to \(destinationPath): \(error.localizedDescription)", level: .error, source: self)
+            logger.error("Unable to rotate file \(currentLogFileURL.path) to \(archiveToFileURL.path): \(error.localizedDescription)")
             return false
         }
 
-//        owner?._logln("Rotated file \(writeToFileURL.path) to \(archiveToFileURL.path)", level: .info, source: self)
+        logger.info("Rotated file \(currentLogFileURL.path) to \(archiveToFileURL.path)")
         openFile()
         
         return true
