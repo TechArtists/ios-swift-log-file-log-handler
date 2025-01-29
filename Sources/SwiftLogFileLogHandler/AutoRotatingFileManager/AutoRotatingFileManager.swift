@@ -170,12 +170,6 @@ final class AutoRotatingFileManager: @unchecked Sendable {
    ///
    /// - Returns: The URL of the combined archive file, or `nil` if the operation fails.
    public func combineArchivedLogFiles() -> URL? {
-       let archivedLogFiles = archivedLogFileURLs()
-
-       guard !archivedLogFiles.isEmpty else {
-           return nil
-       }
-
        let combinedFileName = "\(baseFileName)_combined_archive.\(fileExtension)"
        let combinedFileURL = Self.defaultLogFolderURL.appendingPathComponent(combinedFileName)
 
@@ -183,7 +177,13 @@ final class AutoRotatingFileManager: @unchecked Sendable {
        if fileManager.fileExists(atPath: combinedFileURL.path) {
            try? fileManager.removeItem(at: combinedFileURL)
        }
+       
+       let archivedLogFiles = archivedLogFileURLs()
 
+       guard !archivedLogFiles.isEmpty else {
+           return nil
+       }
+       
        do {
            for fileURL in archivedLogFiles {
                let fileContents = try String(contentsOf: fileURL)
@@ -254,8 +254,8 @@ final class AutoRotatingFileManager: @unchecked Sendable {
             return []
         }
 
-        // Retrieve and sort file URLs based on their creation date
-        let sortedFileURLs = fileURLs.compactMap { fileURL -> (url: URL, creationDate: Date)? in
+        // Filter for .log files and sort by creation date
+        let sortedLogFileURLs = fileURLs.filter { $0.pathExtension == "log" }.compactMap { fileURL -> (url: URL, creationDate: Date)? in
             // Get file attributes and extract the creation date
             let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
             guard let creationDate = attributes?[.creationDate] as? Date else { return nil }
@@ -263,8 +263,7 @@ final class AutoRotatingFileManager: @unchecked Sendable {
             return (url: fileURL, creationDate: creationDate)
         }.sorted { $0.creationDate > $1.creationDate } // Sort by creation date, most recent first
 
-        // Return only the sorted URLs
-        return sortedFileURLs.map { $0.url }
+        return sortedLogFileURLs.map { $0.url }
     }
     
     /// Rotate the current log file.

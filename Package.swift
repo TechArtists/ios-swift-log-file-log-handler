@@ -16,15 +16,18 @@ let package = Package(
         .package(
             url: "https://github.com/apple/swift-log.git",
             from: "1.6.1"
+        ),
+        .package(
+            url: "https://github.com/weichsel/ZIPFoundation.git",
+            .upToNextMajor(from: "0.9.0")
         )
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "SwiftLogFileLogHandler",
             dependencies: [
-                .product(name: "Logging", package: "swift-log")
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ]
         ),
         .testTarget(
