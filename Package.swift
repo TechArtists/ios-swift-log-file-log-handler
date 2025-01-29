@@ -16,18 +16,13 @@ let package = Package(
         .package(
             url: "https://github.com/apple/swift-log.git",
             from: "1.6.1"
-        ),
-        .package(
-            url: "https://github.com/weichsel/ZIPFoundation.git",
-            .upToNextMajor(from: "0.9.0")
         )
     ],
     targets: [
         .target(
             name: "SwiftLogFileLogHandler",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"),
-                .product(name: "ZIPFoundation", package: "ZIPFoundation")
+                .product(name: "Logging", package: "swift-log")
             ]
         ),
         .testTarget(

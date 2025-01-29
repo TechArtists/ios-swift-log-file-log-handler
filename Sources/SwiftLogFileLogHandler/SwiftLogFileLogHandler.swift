@@ -38,35 +38,7 @@ public struct SwiftLogFileLogHandler: LogHandler {
         fileLoggerManager.logToFile("\(message)")
     }
     
-    public func getArchiveURL(asZip: Bool = false, zipFileName: String = "combined_archive.zip") -> URL? {
-        if asZip {
-            guard let combinedArchiveURL = fileLoggerManager.combineArchivedLogFiles() else {
-                logger.error("Failed to combine archived log files.")
-                return nil
-            }
-            
-            let fileManager = FileManager.default
-            
-            let destinationFileURL = AutoRotatingFileManager.defaultLogFolderURL.appendingPathComponent(zipFileName)
-            
-            do {
-                if fileManager.fileExists(atPath: destinationFileURL.path) {
-                    try fileManager.removeItem(at: destinationFileURL)
-                }
-                
-                try fileManager.zipItem(
-                    at: combinedArchiveURL,
-                    to: destinationFileURL,
-                    compressionMethod: .deflate
-                )
-                
-                return destinationFileURL
-            } catch {
-                logger.error("Failed to create ZIP file: \(error.localizedDescription)")
-                return nil
-            }
-        } else {
-            return fileLoggerManager.combineArchivedLogFiles()
-        }
+    public func getArchiveURL() -> URL? {
+        fileLoggerManager.combineArchivedLogFiles()
     }
 }
