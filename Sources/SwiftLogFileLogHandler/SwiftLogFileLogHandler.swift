@@ -4,7 +4,6 @@
 
 import Logging
 import Foundation
-import ZIPFoundation
 
 public struct SwiftLogFileLogHandler: LogHandler {
     private var fileLoggerManager: AutoRotatingFileManager
