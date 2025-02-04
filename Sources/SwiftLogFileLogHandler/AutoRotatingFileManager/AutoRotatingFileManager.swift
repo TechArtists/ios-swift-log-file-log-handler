@@ -11,7 +11,7 @@ import OSLog
 
 let logger = Logger(subsystem: "SwiftLogFileLogHandler", category: "file-handling")
 
-final class AutoRotatingFileManager: @unchecked Sendable {
+public final class AutoRotatingFileManager: @unchecked Sendable {
     
     // MARK: - Constants
     public static let autoRotatingFileDefaultMaxFileSize: UInt64 = 1_048_576
@@ -103,20 +103,13 @@ final class AutoRotatingFileManager: @unchecked Sendable {
     }
     
     // MARK: - Life Cycle
-    init(
-        currentLogFile: Any? = nil,
-        logFileHandle: FileHandle? = nil,
+    public init(
         maxFileSize: UInt64 = autoRotatingFileDefaultMaxFileSize,
         targetMaxLogFiles: UInt64 = 10
     ) {
-        self.logFileHandle = logFileHandle
         self.targetMaxFileSize = maxFileSize < 1 ? .max : maxFileSize
         self.targetMaxLogFiles = targetMaxLogFiles
-        if let currentLogFile {
-            self.currentLogFileURL = resolveAnyFileToUrl(from: currentLogFile)
-        } else {
-            self.currentLogFileURL = Self.defaultLogFolderURL.appendingPathComponent("\(baseFileName).\(fileExtension)")
-        }
+        self.currentLogFileURL = Self.defaultLogFolderURL.appendingPathComponent("\(baseFileName).\(fileExtension)")
         self.archivedLogsFolderURL = determineArchivedLogsFolderURL(currentLogFileURL)
         self.openFile()
         

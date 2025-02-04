@@ -7,6 +7,7 @@ import Foundation
 
 public struct SwiftLogFileLogHandler: LogHandler {
     private var fileLoggerManager: AutoRotatingFileManager
+    
     private var label: String
     
     public var logLevel: Logger.Level = .debug
@@ -22,9 +23,9 @@ public struct SwiftLogFileLogHandler: LogHandler {
         }
     }
 
-    public init(label: String) {
+    public init(label: String, fileLoggerManager: AutoRotatingFileManager = .init()) {
         self.label = label
-        self.fileLoggerManager = AutoRotatingFileManager()
+        self.fileLoggerManager = fileLoggerManager
     }
     
     public func log(level: Logger.Level,
@@ -34,10 +35,84 @@ public struct SwiftLogFileLogHandler: LogHandler {
                     file: String = #file,
                     function: String = #function,
                     line: UInt = #line) {
-        fileLoggerManager.logToFile("\(message)")
+        let effectiveMetadata = SwiftLogFileLogHandler.prepareMetadata(
+            base: self.metadata,
+            provider: self.metadataProvider,
+            explicit: metadata
+        )
+
+        let prettyMetadata: String?
+        if let effectiveMetadata = effectiveMetadata {
+            prettyMetadata = self.prettify(effectiveMetadata)
+        } else {
+            prettyMetadata = nil
+        }
+        
+        fileLoggerManager.logToFile(
+            "\(self.timestamp()) \(level) \(self.label) :\(prettyMetadata.map { " \($0)" } ?? "") [\(source)] \(message)\n"
+        )
     }
     
-    public func getArchiveURL() -> URL? {
+    public func getCombinedArchibedLogFilesURL() -> URL? {
         fileLoggerManager.combineArchivedLogFiles()
+    }
+    
+    public func getCurrentLogFileURL() -> URL? {
+        fileLoggerManager.currentLogFileURL
+    }
+    
+    public func getCurrentArchivedCount() -> Int {
+        fileLoggerManager.archivedLogFileURLs().count
+    }
+    
+    // MARK: Private Functions
+    
+    private static func prepareMetadata(
+        base: Logger.Metadata,
+        provider: Logger.MetadataProvider?,
+        explicit: Logger.Metadata?
+    ) -> Logger.Metadata? {
+        var metadata = base
+
+        let provided = provider?.get() ?? [:]
+
+        guard !provided.isEmpty || !((explicit ?? [:]).isEmpty) else {
+            // all per-log-statement values are empty
+            return nil
+        }
+
+        if !provided.isEmpty {
+            metadata.merge(provided, uniquingKeysWith: { _, provided in provided })
+        }
+
+        if let explicit = explicit, !explicit.isEmpty {
+            metadata.merge(explicit, uniquingKeysWith: { _, explicit in explicit })
+        }
+
+        return metadata
+    }
+
+    private func prettify(_ metadata: Logger.Metadata) -> String? {
+        if metadata.isEmpty {
+            return nil
+        } else {
+            return metadata.lazy.sorted(by: { $0.key < $1.key }).map { "\($0)=\($1)" }.joined(separator: " ")
+        }
+    }
+    
+    private func timestamp() -> String {
+        var buffer = [Int8](repeating: 0, count: 255)
+
+        var timestamp = time(nil)
+        guard let localTime = localtime(&timestamp) else {
+            return "<unknown>"
+        }
+        strftime(&buffer, buffer.count, "%Y-%m-%dT%H:%M:%S%z", localTime)
+
+        return buffer.withUnsafeBufferPointer {
+            $0.withMemoryRebound(to: CChar.self) {
+                String(cString: $0.baseAddress!)
+            }
+        }
     }
 }
