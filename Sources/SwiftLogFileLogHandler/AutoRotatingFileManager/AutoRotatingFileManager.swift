@@ -160,7 +160,11 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     }
     
     public func getCurrentLogFileURL() -> URL? {
-        return currentLogFileURL
+        currentLogFileURL
+    }
+    
+    public func getCurrentStashedLogsCount() -> Int {
+        stashedLogFileURLs().count
     }
     
    /// Combines all stashed log files into a single file and returns its URL.
