@@ -35,6 +35,7 @@ public struct SwiftLogFileLogHandler: LogHandler {
                     file: String = #file,
                     function: String = #function,
                     line: UInt = #line) {
+        
         let effectiveMetadata = SwiftLogFileLogHandler.prepareMetadata(
             base: self.metadata,
             provider: self.metadataProvider,

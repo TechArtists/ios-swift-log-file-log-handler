@@ -31,16 +31,16 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     }
     
     /// Option: desired maximum size of a log file, if 0, no maximum (log files may exceed this, it's a guideline only)
-    internal var targetMaxFileSize: UInt64 = autoRotatingFileDefaultMaxFileSize {
+    internal var maxLogFileSize: UInt64 {
         didSet {
-            if targetMaxFileSize < 1 {
-                targetMaxFileSize = .max
+            if maxLogFileSize < 1 {
+                maxLogFileSize = .max
             }
         }
     }
     
     /// Option: the desired number of stashed log files to keep (number of log files may exceed this, it's a guideline only)
-    internal var targetMaxLogFiles: UInt64 = 10 {
+    internal var maxLogFilesCount: UInt64 {
         didSet {
             cleanUpOldLogFiles()
         }
@@ -102,11 +102,11 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     
     // MARK: - Life Cycle
     public init(
-        maxFileSize: UInt64 = autoRotatingFileDefaultMaxFileSize,
-        targetMaxLogFiles: UInt64 = 10
+        maxLogFileSize: UInt64 = autoRotatingFileDefaultMaxFileSize,
+        maxLogFilesCount: UInt64 = 10
     ) {
-        self.targetMaxFileSize = maxFileSize < 1 ? .max : maxFileSize
-        self.targetMaxLogFiles = targetMaxLogFiles
+        self.maxLogFileSize = maxLogFileSize < 1 ? .max : maxLogFileSize
+        self.maxLogFilesCount = maxLogFilesCount
         self.currentLogFileURL = Self.defaultLogFolderURL.appendingPathComponent("\(baseFileName).\(fileExtension)")
         self.stashedLogsFolderURL = determineStashedLogsFolderURL(currentLogFileURL)
         self.openFile()
@@ -226,7 +226,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     /// - Returns:  Nothing
     ///
     internal func write(message: String) {
-        currentLogFileSize += UInt64(message.count)
+        currentLogFileSize += UInt64(message.data(using: .utf8)?.count ?? 0)
 
         if let encodedData = "\(message)\n".data(using: String.Encoding.utf8) {
             do {
@@ -294,9 +294,10 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     /// Scan the log folder and delete log files that are no longer relevant.
     internal func cleanUpOldLogFiles() {
         var stashedLogFileURLs: [URL] = self.stashedLogFileURLs()
-        guard stashedLogFileURLs.count > Int(targetMaxLogFiles) else { return }
+        
+        guard stashedLogFileURLs.count > Int(maxLogFilesCount) else { return }
 
-        stashedLogFileURLs.removeFirst(Int(targetMaxLogFiles))
+        stashedLogFileURLs.removeFirst(Int(maxLogFilesCount))
 
         let fileManager: FileManager = FileManager.default
         for stashedLogFileURL in stashedLogFileURLs {
@@ -317,7 +318,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         // Do not rotate until critical setup has been completed so that we do not accidentally rotate once to the defaultLogFolderURL before determining the desired log location
         guard let _ = stashedLogsFolderURL else { return false }
         
-        guard currentLogFileSize < targetMaxFileSize else { return true }
+        guard currentLogFileSize < maxLogFileSize else { return true }
 
         return false
     }
