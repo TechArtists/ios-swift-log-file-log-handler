@@ -9,8 +9,6 @@ import Foundation
 import Compression
 import Logging
 
-let logger = Logger(label: "com.tech-artists.SwiftLogFileLogHandler")
-
 public final class AutoRotatingFileManager: @unchecked Sendable {
     
     // MARK: - Constants
@@ -146,7 +144,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
             let fileAttributes = try FileManager.default.attributesOfItem(atPath: filePath)
             return fileAttributes[.size] as? UInt64 ?? 0
         } catch {
-            logger.error("Error fetching curren log file size \(error.localizedDescription)")
+            TALogger.main.error("Error fetching curren log file size \(error.localizedDescription)")
             return 0
         }
     }
@@ -195,7 +193,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
                try fileContents.appendLine(to: combinedFileURL)
            }
        } catch {
-           logger.error("Error combining stashed log files: \(error.localizedDescription)")
+           TALogger.main.error("Error combining stashed log files: \(error.localizedDescription)")
            return nil
        }
 
@@ -212,7 +210,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
        do {
            try fileManager.removeItem(at: combinedStashedLogFilesURL)
        } catch {
-           logger.error("Error clearing combined stashed: \(error.localizedDescription)")
+           TALogger.main.error("Error clearing combined stashed: \(error.localizedDescription)")
        }
 
        self.combinedStashedLogFilesURL = nil
@@ -235,7 +233,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
                 try logFileHandle?.seekToEnd()
                 try logFileHandle?.write(contentsOf: encodedData)
             } catch {
-                logger.error("Error writing to log file: \(error.localizedDescription)")
+                TALogger.main.error("Error writing to log file: \(error.localizedDescription)")
             }
         }
 
@@ -306,7 +304,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
                 try fileManager.removeItem(at: stashedLogFileURL)
             }
             catch {
-                logger.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
+                TALogger.main.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
             }
         }
     }
@@ -332,7 +330,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
                 try fileManager.removeItem(at: stashedLogFileURL)
             }
             catch {
-                logger.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
+                TALogger.main.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
             }
         }
     }
@@ -359,7 +357,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
                 write(message: "\(appendMarker)\n")
             }
         } catch {
-            logger.error("Attempt to open log file failed: \(error.localizedDescription)")
+            TALogger.main.error("Attempt to open log file failed: \(error.localizedDescription)")
             logFileHandle = nil
             return
         }
@@ -370,7 +368,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     internal func logOpeningDetails(fileExists: Bool) {
         guard let currentLogFileURL = currentLogFileURL else { return }
         
-        logger.info("SwiftLogFileLogHandler opened log file at: \(currentLogFileURL.absoluteString)")
+        TALogger.main.info("SwiftLogFileLogHandler opened log file at: \(currentLogFileURL.absoluteString)")
     }
     
     @discardableResult
@@ -389,11 +387,11 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
             try fileManager.moveItem(atPath: currentLogFileURL.path, toPath: stashToFileURL.path)
         } catch {
             openFile()
-            logger.error("Unable to rotate file \(currentLogFileURL.path) to \(stashToFileURL.path): \(error.localizedDescription)")
+            TALogger.main.error("Unable to rotate file \(currentLogFileURL.path) to \(stashToFileURL.path): \(error.localizedDescription)")
             return false
         }
 
-        logger.info("Rotated file \(currentLogFileURL.path) to \(stashToFileURL.path)")
+        TALogger.main.info("Rotated file \(currentLogFileURL.path) to \(stashToFileURL.path)")
         openFile()
         
         return true
