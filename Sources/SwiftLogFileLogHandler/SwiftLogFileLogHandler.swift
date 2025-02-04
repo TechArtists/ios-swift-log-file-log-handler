@@ -53,16 +53,16 @@ public struct SwiftLogFileLogHandler: LogHandler {
         )
     }
     
-    public func getCombinedArchivedLogFilesURL() -> URL? {
-        fileLoggerManager.combineArchivedLogFiles()
+    public func getCombinedStashedLogFilesURL() -> URL? {
+        fileLoggerManager.combineStashedLogFiles()
     }
     
     public func getCurrentLogFileURL() -> URL? {
         fileLoggerManager.currentLogFileURL
     }
     
-    public func getCurrentArchivedCount() -> Int {
-        fileLoggerManager.archivedLogFileURLs().count
+    public func getCurrentStashedCount() -> Int {
+        fileLoggerManager.stashedLogFileURLs().count
     }
     
     // MARK: Private Functions

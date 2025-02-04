@@ -7,9 +7,9 @@
 
 import Foundation
 import Compression
-import OSLog
+import Logging
 
-let logger = Logger(subsystem: "SwiftLogFileLogHandler", category: "file-handling")
+let logger = Logger(label: "com.tech-artists.SwiftLogFileLogHandler")
 
 public final class AutoRotatingFileManager: @unchecked Sendable {
     
@@ -22,8 +22,8 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     /// File handle for the log file
     private var logFileHandle: FileHandle? = nil
     
-    /// URL of the combined archive file
-    private var combinedArchiveFileURL: URL? = nil
+    /// URL of the combined stashed log files into one file
+    private var combinedStashedLogFilesURL: URL? = nil
     
     /// FileURL of the file to log to
     internal var currentLogFileURL: URL? = nil {
@@ -41,30 +41,30 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         }
     }
     
-    /// Option: the desired number of archived log files to keep (number of log files may exceed this, it's a guideline only)
+    /// Option: the desired number of stashed log files to keep (number of log files may exceed this, it's a guideline only)
     internal var targetMaxLogFiles: UInt64 = 10 {
         didSet {
             cleanUpOldLogFiles()
         }
     }
     
-    /// Option: the URL of the folder to store archived log files (defaults to the same folder as the initial log file)
-    internal var archivedLogsFolderURL: URL? = nil {
+    /// Option: the URL of the folder to store rotated log files (defaults to the same folder as the initial log file)
+    internal var stashedLogsFolderURL: URL? = nil {
         didSet {
-            guard let archivedLogsFolderURL = archivedLogsFolderURL else { return }
-            try? FileManager.default.createDirectory(at: archivedLogsFolderURL, withIntermediateDirectories: true)
+            guard let stashedLogsFolderURL = stashedLogsFolderURL else { return }
+            try? FileManager.default.createDirectory(at: stashedLogsFolderURL, withIntermediateDirectories: true)
         }
     }
     
-    private var fileManagerQueue = DispatchQueue(label: "com.ta.AutoRotatingFileManager.queue")
+    private var fileManagerQueue = DispatchQueue(label: "com.tech-artists.AutoRotatingFileManager.queue")
     
-    /// A custom date formatter object to use as the suffix of archived log files
-    private var _customArchiveSuffixDateFormatter: DateFormatter?
+    /// A custom date formatter object to use as the suffix of rotated log files
+    private var _customStashedSuffixDateFormatter: DateFormatter?
     
-    /// The date formatter object to use as the suffix of archived log files
-    internal var archiveSuffixDateFormatter: DateFormatter {
+    /// The date formatter object to use as the suffix of stored log files
+    internal var stashedSuffixDateFormatter: DateFormatter {
         get {
-            _customArchiveSuffixDateFormatter ?? {
+            _customStashedSuffixDateFormatter ?? {
                 let formatter = DateFormatter()
                 formatter.locale = .current
                 formatter.dateFormat = "_yyyy-MM-dd_HHmmss"
@@ -72,7 +72,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
             }()
         }
         set {
-            _customArchiveSuffixDateFormatter = newValue
+            _customStashedSuffixDateFormatter = newValue
         }
     }
     
@@ -85,7 +85,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     /// The extension of the log file name
     internal var fileExtension: String = "log"
     
-    /// A default folder for storing archived logs if one isn't supplied
+    /// A default folder for storing stashed logs if one isn't supplied
     internal static var defaultLogFolderURL: URL {
         let defaultDirectory: URL
 
@@ -110,14 +110,14 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         self.targetMaxFileSize = maxFileSize < 1 ? .max : maxFileSize
         self.targetMaxLogFiles = targetMaxLogFiles
         self.currentLogFileURL = Self.defaultLogFolderURL.appendingPathComponent("\(baseFileName).\(fileExtension)")
-        self.archivedLogsFolderURL = determineArchivedLogsFolderURL(currentLogFileURL)
+        self.stashedLogsFolderURL = determineStashedLogsFolderURL(currentLogFileURL)
         self.openFile()
         
         guard let filePath = currentLogFileURL?.path else { return }
 
         self.currentLogFileSize = fetchCurrentLogFileSize(filePath: filePath)
         
-        if shouldRotateArchivedLogs() {
+        if shouldRotateCurrentLogFile() {
             rotateCurrentLogFile()
         }
     }
@@ -129,14 +129,14 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
 
     // MARK: - Helper Init Methods
 
-    private func determineArchivedLogsFolderURL(_ logFileURL: URL?) -> URL? {
+    private func determineStashedLogsFolderURL(_ logFileURL: URL?) -> URL? {
         guard let filePath = logFileURL?.path else { return Self.defaultLogFolderURL }
         let logFileName = "\(baseFileName).\(fileExtension)"
 
         if let logFileNameRange = filePath.range(of: logFileName, options: .backwards),
            logFileNameRange.upperBound >= filePath.endIndex {
-            let archiveFolderPath = String(filePath[filePath.startIndex ..< logFileNameRange.lowerBound])
-            return URL(fileURLWithPath: archiveFolderPath)
+            let stashedFolderPath = String(filePath[filePath.startIndex ..< logFileNameRange.lowerBound])
+            return URL(fileURLWithPath: stashedFolderPath)
         }
         return Self.defaultLogFolderURL
     }
@@ -159,11 +159,15 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         }
     }
     
-   /// Combines all archived log files into a single file and returns its URL.
+    public func getCurrentLogFileURL() -> URL? {
+        return currentLogFileURL
+    }
+    
+   /// Combines all stashed log files into a single file and returns its URL.
    ///
-   /// - Returns: The URL of the combined archive file, or `nil` if the operation fails.
-   public func combineArchivedLogFiles() -> URL? {
-       let combinedFileName = "\(baseFileName)_combined_archive.\(fileExtension)"
+   /// - Returns: The URL of the combined rotated file, or `nil` if the operation fails.
+   public func combineStashedLogFiles( includeCurrentLogFile: Bool = false) -> URL? {
+       let combinedFileName = "\(baseFileName)_combined_stashed.\(fileExtension)"
        let combinedFileURL = Self.defaultLogFolderURL.appendingPathComponent(combinedFileName)
 
        let fileManager = FileManager.default
@@ -171,39 +175,43 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
            try? fileManager.removeItem(at: combinedFileURL)
        }
        
-       let archivedLogFiles = archivedLogFileURLs()
+       var stashedLogFileURLs = stashedLogFileURLs()
+       
+       if let currentLogFileURL, includeCurrentLogFile {
+           stashedLogFileURLs.append(currentLogFileURL)
+       }
 
-       guard !archivedLogFiles.isEmpty else {
+       guard !stashedLogFileURLs.isEmpty else {
            return nil
        }
        
        do {
-           for fileURL in archivedLogFiles {
+           for fileURL in stashedLogFileURLs {
                let fileContents = try String(contentsOf: fileURL)
                try fileContents.appendLine(to: combinedFileURL)
            }
        } catch {
-           logger.error("Error combining archived log files: \(error.localizedDescription)")
+           logger.error("Error combining stashed log files: \(error.localizedDescription)")
            return nil
        }
 
-       combinedArchiveFileURL = combinedFileURL
+       combinedStashedLogFilesURL = combinedFileURL
        return combinedFileURL
    }
 
-   /// Clears the combined archive file from memory.
-   public func clearCombinedArchive() {
-       guard let combinedArchiveFileURL = combinedArchiveFileURL else { return }
+   /// Clears the combined stashed file from memory.
+   public func clearCombinedStashedLogsFile() {
+       guard let combinedStashedLogFilesURL = combinedStashedLogFilesURL else { return }
 
        let fileManager = FileManager.default
        
        do {
-           try fileManager.removeItem(at: combinedArchiveFileURL)
+           try fileManager.removeItem(at: combinedStashedLogFilesURL)
        } catch {
-           logger.error("Error clearing combined archive: \(error.localizedDescription)")
+           logger.error("Error clearing combined stashed: \(error.localizedDescription)")
        }
 
-       self.combinedArchiveFileURL = nil
+       self.combinedStashedLogFilesURL = nil
    }
     
     // MARK: - Internal Methods
@@ -227,46 +235,54 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
             }
         }
 
-        if shouldRotateArchivedLogs() {
+        if shouldRotateCurrentLogFile() {
             rotateCurrentLogFile()
         }
     }
     
-    /// Get the URLs of the archived log files.
+    /// Get the URLs of the stashed log files.
     ///
     /// - Parameters:   None.
     ///
-    /// - Returns:      An array of file URLs pointing to previously archived log files, sorted with the most recent logs first.
+    /// - Returns:      An array of file URLs pointing to previously stashed log files, sorted with the most recent logs first.
     ///
-    internal func archivedLogFileURLs() -> [URL] {
-        // Determine the archive folder URL
-        let archiveFolderURL: URL = self.archivedLogsFolderURL ?? Self.defaultLogFolderURL
+    internal func stashedLogFileURLs() -> [URL] {
+        // Determine the stashed folder URL
+        let stashedLogsFolderURL: URL = self.stashedLogsFolderURL ?? Self.defaultLogFolderURL
 
-        // Retrieve file URLs in the archive folder, or return an empty array if failed
-        guard let fileURLs = try? FileManager.default.contentsOfDirectory(at: archiveFolderURL, includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles]) else {
+        // Retrieve file URLs in the stashed folder, or return an empty array if failed
+        guard let fileURLs = try? FileManager.default.contentsOfDirectory(
+            at: stashedLogsFolderURL,
+            includingPropertiesForKeys: [.creationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
             return []
         }
 
-        // Filter for .log files and sort by creation date
-        let sortedLogFileURLs = fileURLs.filter { $0.pathExtension == "log" }.compactMap { fileURL -> (url: URL, creationDate: Date)? in
-            // Get file attributes and extract the creation date
-            let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
-            guard let creationDate = attributes?[.creationDate] as? Date else { return nil }
-            
-            return (url: fileURL, creationDate: creationDate)
-        }.sorted { $0.creationDate > $1.creationDate } // Sort by creation date, most recent first
+        // Ensure we exclude the current log file URL
+        let currentLogFilePath = currentLogFileURL?.path
+
+        // Filter for .log files, remove the current log file, and sort by creation date
+        let sortedLogFileURLs = fileURLs
+            .filter { $0.pathExtension == "log" && $0.path != currentLogFilePath }
+            .compactMap { fileURL -> (url: URL, creationDate: Date)? in
+                let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+                guard let creationDate = attributes?[.creationDate] as? Date else { return nil }
+                return (url: fileURL, creationDate: creationDate)
+            }
+            .sorted { $0.creationDate > $1.creationDate } // Sort by creation date, most recent first
 
         return sortedLogFileURLs.map { $0.url }
     }
     
     /// Rotate the current log file.
     internal func rotateCurrentLogFile() {
-        var archivedLogsFolderURL: URL = (self.archivedLogsFolderURL ?? Self.defaultLogFolderURL)
+        var stashedLogsFolderURL: URL = (self.stashedLogsFolderURL ?? Self.defaultLogFolderURL)
         
-        archivedLogsFolderURL = archivedLogsFolderURL.appendingPathComponent("\(baseFileName)\(archiveSuffixDateFormatter.string(from: Date()))")
-        archivedLogsFolderURL = archivedLogsFolderURL.appendingPathExtension(fileExtension)
+        stashedLogsFolderURL = stashedLogsFolderURL.appendingPathComponent("\(baseFileName)\(stashedSuffixDateFormatter.string(from: Date()))")
+        stashedLogsFolderURL = stashedLogsFolderURL.appendingPathExtension(fileExtension)
         
-        rotateFile(to: archivedLogsFolderURL)
+        rotateFile(to: stashedLogsFolderURL)
 
         currentLogFileSize = 0
 
@@ -275,18 +291,18 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     
     /// Scan the log folder and delete log files that are no longer relevant.
     internal func cleanUpOldLogFiles() {
-        var archivedLogFileURLs: [URL] = self.archivedLogFileURLs()
-        guard archivedLogFileURLs.count > Int(targetMaxLogFiles) else { return }
+        var stashedLogFileURLs: [URL] = self.stashedLogFileURLs()
+        guard stashedLogFileURLs.count > Int(targetMaxLogFiles) else { return }
 
-        archivedLogFileURLs.removeFirst(Int(targetMaxLogFiles))
+        stashedLogFileURLs.removeFirst(Int(targetMaxLogFiles))
 
         let fileManager: FileManager = FileManager.default
-        for archivedLogFileURL in archivedLogFileURLs {
+        for stashedLogFileURL in stashedLogFileURLs {
             do {
-                try fileManager.removeItem(at: archivedLogFileURL)
+                try fileManager.removeItem(at: stashedLogFileURL)
             }
             catch {
-                logger.error("Unable to delete old archived log file \(archivedLogFileURL.path): \(error.localizedDescription)")
+                logger.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
             }
         }
     }
@@ -295,24 +311,24 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     /// - Returns:
     ///     - If the log file should be rotated.
     ///
-    internal func shouldRotateArchivedLogs() -> Bool {
+    internal func shouldRotateCurrentLogFile() -> Bool {
         // Do not rotate until critical setup has been completed so that we do not accidentally rotate once to the defaultLogFolderURL before determining the desired log location
-        guard let _ = archivedLogsFolderURL else { return false }
+        guard let _ = stashedLogsFolderURL else { return false }
         
         guard currentLogFileSize < targetMaxFileSize else { return true }
 
         return false
     }
     
-    internal func purgeArchivedLogFiles() {
+    internal func purgeStashedLogFiles() {
         let fileManager: FileManager = FileManager.default
         
-        for archivedLogFileURL in archivedLogFileURLs() {
+        for stashedLogFileURL in stashedLogFileURLs() {
             do {
-                try fileManager.removeItem(at: archivedLogFileURL)
+                try fileManager.removeItem(at: stashedLogFileURL)
             }
             catch {
-                logger.error("Unable to delete old archived log file \(archivedLogFileURL.path): \(error.localizedDescription)")
+                logger.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
             }
         }
     }
@@ -354,26 +370,26 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     }
     
     @discardableResult
-    internal func rotateFile(to archiveToFile: Any) -> Bool {
-        guard let archiveToFileURL = resolveAnyFileToUrl(from: archiveToFile) else { return false }
+    internal func rotateFile(to stashToFile: Any) -> Bool {
+        guard let stashToFileURL = resolveAnyFileToUrl(from: stashToFile) else { return false }
 
         guard let currentLogFileURL = currentLogFileURL else { return false }
 
         let fileManager = FileManager.default
 
-        guard !fileManager.fileExists(atPath: archiveToFileURL.path) else { return false }
+        guard !fileManager.fileExists(atPath: stashToFileURL.path) else { return false }
 
         closeFile()
 
         do {
-            try fileManager.moveItem(atPath: currentLogFileURL.path, toPath: archiveToFileURL.path)
+            try fileManager.moveItem(atPath: currentLogFileURL.path, toPath: stashToFileURL.path)
         } catch {
             openFile()
-            logger.error("Unable to rotate file \(currentLogFileURL.path) to \(archiveToFileURL.path): \(error.localizedDescription)")
+            logger.error("Unable to rotate file \(currentLogFileURL.path) to \(stashToFileURL.path): \(error.localizedDescription)")
             return false
         }
 
-        logger.info("Rotated file \(currentLogFileURL.path) to \(archiveToFileURL.path)")
+        logger.info("Rotated file \(currentLogFileURL.path) to \(stashToFileURL.path)")
         openFile()
         
         return true
