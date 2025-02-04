@@ -53,7 +53,7 @@ public struct SwiftLogFileLogHandler: LogHandler {
         )
     }
     
-    public func getCombinedArchibedLogFilesURL() -> URL? {
+    public func getCombinedArchivedLogFilesURL() -> URL? {
         fileLoggerManager.combineArchivedLogFiles()
     }
     
