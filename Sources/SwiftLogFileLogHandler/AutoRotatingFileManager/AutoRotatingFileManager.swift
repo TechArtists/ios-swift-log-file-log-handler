@@ -261,12 +261,9 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
             return []
         }
 
-        // Ensure we exclude the current log file URL
-        let currentLogFilePath = currentLogFileURL?.path
-
         // Filter for .log files, remove the current log file, and sort by creation date
         let sortedLogFileURLs = fileURLs
-            .filter { $0.pathExtension == "log" && $0.path != currentLogFilePath }
+            .filter { $0.pathExtension == "log" && $0.lastPathComponent != currentLogFileURL?.lastPathComponent }
             .compactMap { fileURL -> (url: URL, creationDate: Date)? in
                 let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
                 guard let creationDate = attributes?[.creationDate] as? Date else { return nil }
