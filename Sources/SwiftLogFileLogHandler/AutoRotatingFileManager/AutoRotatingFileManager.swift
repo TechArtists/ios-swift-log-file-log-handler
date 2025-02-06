@@ -160,8 +160,21 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         currentLogFileURL
     }
     
-    public func getCurrentStashedLogsCount() -> Int {
-        stashedLogFileURLs().count
+    public func getCurrentLogsCount() -> Int {
+        let stashedLogsFolderURL: URL = self.stashedLogsFolderURL ?? Self.defaultLogFolderURL
+
+        guard let fileURLs = try? FileManager.default.contentsOfDirectory(
+            at: stashedLogsFolderURL,
+            includingPropertiesForKeys: [.creationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+
+        let sortedLogFileURLs = fileURLs
+            .filter { $0.pathExtension == "log" }
+
+        return sortedLogFileURLs.count
     }
     
     /// Combines all stashed log files into a single file and optionally compresses the file using Apple’s Compression library.
