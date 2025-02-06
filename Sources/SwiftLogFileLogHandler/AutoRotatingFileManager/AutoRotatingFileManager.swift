@@ -121,7 +121,6 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     }
     
     deinit {
-        // close file stream if open
         closeFile()
     }
 
@@ -165,41 +164,60 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         stashedLogFileURLs().count
     }
     
-   /// Combines all stashed log files into a single file and returns its URL.
-   ///
-   /// - Returns: The URL of the combined rotated file, or `nil` if the operation fails.
-   public func combineStashedLogFiles( includeCurrentLogFile: Bool = false) -> URL? {
-       let combinedFileName = "\(baseFileName)_combined_stashed.\(fileExtension)"
-       let combinedFileURL = Self.defaultLogFolderURL.appendingPathComponent(combinedFileName)
+    /// Combines all stashed log files into a single file and optionally compresses the file using Apple’s Compression library.
+    /// - Parameters:
+    ///   - includeCurrentLogFile: If true, also includes the current log file.
+    ///   - compress: If true, compresses the combined log file using the Compression framework.
+    /// - Returns: The URL of the combined (or compressed) log file, or `nil` if the operation fails.
+    public func combineStashedLogFiles(includeCurrentLogFile: Bool = false, archive: Bool = false) -> URL? {
+        let combinedFileName = "\(baseFileName)_combined_stashed.\(fileExtension)"
+        let combinedFileURL = Self.defaultLogFolderURL.appendingPathComponent(combinedFileName)
+        
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: combinedFileURL.path) {
+            try? fileManager.removeItem(at: combinedFileURL)
+        }
+        
+        var stashedLogFileURLs = stashedLogFileURLs()
+        
+        if let currentLogFileURL, includeCurrentLogFile {
+            stashedLogFileURLs.append(currentLogFileURL)
+        }
+        
+        guard !stashedLogFileURLs.isEmpty else {
+            return nil
+        }
+        
+        do {
+            for fileURL in stashedLogFileURLs {
+                let fileContents = try String(contentsOf: fileURL)
+                try fileContents.appendLine(to: combinedFileURL)
+            }
+        } catch {
+            TALogger.main.error("Error combining stashed log files: \(error.localizedDescription)")
+            return nil
+        }
+        
+        combinedStashedLogFilesURL = combinedFileURL
+        
+        if archive {
+            let zipFileName = "\(baseFileName)_archived.zip"
+            let zipFileURL = Self.defaultLogFolderURL.appendingPathComponent(zipFileName)
+            
+            if fileManager.fileExists(atPath: zipFileURL.path) {
+                try? fileManager.removeItem(at: zipFileURL)
+            }
 
-       let fileManager = FileManager.default
-       if fileManager.fileExists(atPath: combinedFileURL.path) {
-           try? fileManager.removeItem(at: combinedFileURL)
-       }
-       
-       var stashedLogFileURLs = stashedLogFileURLs()
-       
-       if let currentLogFileURL, includeCurrentLogFile {
-           stashedLogFileURLs.append(currentLogFileURL)
-       }
-
-       guard !stashedLogFileURLs.isEmpty else {
-           return nil
-       }
-       
-       do {
-           for fileURL in stashedLogFileURLs {
-               let fileContents = try String(contentsOf: fileURL)
-               try fileContents.appendLine(to: combinedFileURL)
-           }
-       } catch {
-           TALogger.main.error("Error combining stashed log files: \(error.localizedDescription)")
-           return nil
-       }
-
-       combinedStashedLogFilesURL = combinedFileURL
-       return combinedFileURL
-   }
+            do {
+                let zipArchiveURL = try ZipUtility.createZipArchive(from: combinedFileURL, to: zipFileURL)
+                return zipArchiveURL
+            } catch {
+                TALogger.main.error("Failed to create ZIP archive. \(error.localizedDescription) ")
+            }
+        }
+        
+        return combinedFileURL
+    }
 
    /// Clears the combined stashed file from memory.
    public func clearCombinedStashedLogsFile() {
