@@ -191,7 +191,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
             try? fileManager.removeItem(at: combinedFileURL)
         }
         
-        var stashedLogFileURLs = stashedLogFileURLs()
+        var stashedLogFileURLs = Array(stashedLogFileURLs().reversed())
         
         if let currentLogFileURL, includeCurrentLogFile {
             stashedLogFileURLs.append(currentLogFileURL)
