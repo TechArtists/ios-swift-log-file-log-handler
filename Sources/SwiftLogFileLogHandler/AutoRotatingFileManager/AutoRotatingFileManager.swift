@@ -256,6 +256,9 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         var stashedLogFileURLs = stashedLogFileURLs()
         
         if includeCurrentLogFile, let currentLogFileURL {
+            defer {
+                self.currentLogFileURL = Self.defaultLogFolderURL.appendingPathComponent("\(baseFileName).\(fileExtension)")
+            }
             stashedLogFileURLs.append(currentLogFileURL)
         }
         
