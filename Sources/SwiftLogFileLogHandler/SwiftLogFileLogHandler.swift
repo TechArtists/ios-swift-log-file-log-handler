@@ -50,7 +50,7 @@ public struct SwiftLogFileLogHandler: LogHandler {
         }
         
         fileLoggerManager.logToFile(
-            "\(self.timestamp()) \(level) \(self.label) :\(prettyMetadata.map { " \($0)" } ?? "") [\(source)] \(message)\n"
+            "\(self.timestamp()) \(level) [\(self.label)] :\(prettyMetadata.map { " \($0)" } ?? "") [\(source)] \(message)\n"
         )
     }
     

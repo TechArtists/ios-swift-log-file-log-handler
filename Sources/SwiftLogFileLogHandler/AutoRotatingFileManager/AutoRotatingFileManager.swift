@@ -232,20 +232,42 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         return combinedFileURL
     }
 
-   /// Clears the combined stashed file from memory.
-   public func clearCombinedStashedLogsFile() {
-       guard let combinedStashedLogFilesURL = combinedStashedLogFilesURL else { return }
-
-       let fileManager = FileManager.default
-       
-       do {
-           try fileManager.removeItem(at: combinedStashedLogFilesURL)
-       } catch {
-           TALogger.main.error("Error clearing combined stashed: \(error.localizedDescription)")
-       }
-
-       self.combinedStashedLogFilesURL = nil
-   }
+    /// Clears the combined stashed file from memory.
+    public func clearCombinedStashedLogsFile() {
+        guard let combinedStashedLogFilesURL = combinedStashedLogFilesURL else { return }
+        
+        let fileManager = FileManager.default
+        
+        do {
+            try fileManager.removeItem(at: combinedStashedLogFilesURL)
+        } catch {
+            TALogger.main.error("Error clearing combined stashed: \(error.localizedDescription)")
+        }
+        
+        self.combinedStashedLogFilesURL = nil
+    }
+    
+    /// Purge all stashed log files (include the current one if specified
+    /// - Parameters:
+    ///   - includeCurrentLogFile: If true, also includes the current log file.
+    public func purgeLogFiles(includeCurrentLogFile: Bool = false) {
+        let fileManager: FileManager = FileManager.default
+        
+        var stashedLogFileURLs = stashedLogFileURLs()
+        
+        if includeCurrentLogFile, let currentLogFileURL {
+            stashedLogFileURLs.append(currentLogFileURL)
+        }
+        
+        for stashedLogFileURL in stashedLogFileURLs {
+            do {
+                try fileManager.removeItem(at: stashedLogFileURL)
+            }
+            catch {
+                TALogger.main.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
+            }
+        }
+    }
     
     // MARK: - Internal Methods
     
@@ -349,19 +371,6 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         guard currentLogFileSize < maxLogFileSize else { return true }
 
         return false
-    }
-    
-    internal func purgeStashedLogFiles() {
-        let fileManager: FileManager = FileManager.default
-        
-        for stashedLogFileURL in stashedLogFileURLs() {
-            do {
-                try fileManager.removeItem(at: stashedLogFileURL)
-            }
-            catch {
-                TALogger.main.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
-            }
-        }
     }
     
     internal func openFile() {
