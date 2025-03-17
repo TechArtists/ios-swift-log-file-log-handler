@@ -39,8 +39,7 @@ extension String {
     ///   - url: The URL of the file to append to.
     /// - Throws: An error if the file could not be written to.
     func appendLine(to url: URL) throws {
-        let data = (self + "
-").data(using: .utf8)!
+        let data = (self + "").data(using: .utf8)!
         if let fileHandle = try? FileHandle(forWritingTo: url) {
             try fileHandle.seekToEnd()
             try fileHandle.write(contentsOf: data)
