@@ -33,7 +33,7 @@ import Foundation
 import Compression
 import OSLog
 
-private let logger = Logger(subsystem: "com.tech-artists.SwiftLogFileLogHandler", category: "file-manager")
+let logger = Logger(subsystem: "com.tech-artists.SwiftLogFileLogHandler", category: "file-manager")
 
 public final class AutoRotatingFileManager: @unchecked Sendable {
     
@@ -387,7 +387,7 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
                 try fileManager.removeItem(at: stashedLogFileURL)
             }
             catch {
-                TALogger.main.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
+                logger.error("Unable to delete old stashed log file \(stashedLogFileURL.path): \(error.localizedDescription)")
             }
         }
     }

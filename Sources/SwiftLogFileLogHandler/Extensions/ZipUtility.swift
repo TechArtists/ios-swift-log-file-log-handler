@@ -109,9 +109,9 @@ struct ZipUtility {
                 do {
                     try fileManager.removeItem(at: folderURL)
                 } catch ZipArchiveError.sourceDoesNotExist {
-                    TALogger.main.warning("Warning: Source URL \(sourceURL) does not exist")
+                    logger.warning("Warning: Source URL \(sourceURL) does not exist")
                 } catch {
-                    TALogger.main.warning("Warning: Failed to remove temporary folder at \(folderURL): \(error)")
+                    logger.warning("Warning: Failed to remove temporary folder at \(folderURL): \(error)")
                 }
             }
         }
