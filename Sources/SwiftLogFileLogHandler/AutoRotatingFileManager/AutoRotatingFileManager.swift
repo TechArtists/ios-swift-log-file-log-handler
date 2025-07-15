@@ -313,7 +313,9 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     internal func write(message: String) {
         currentLogFileSize += UInt64(message.data(using: .utf8)?.count ?? 0)
 
-        if let encodedData = "\(message)".data(using: String.Encoding.utf8) {
+        let messageWithNewline = message + "\n"
+
+        if let encodedData = messageWithNewline.data(using: .utf8) {
             do {
                 try logFileHandle?.seekToEnd()
                 try logFileHandle?.write(contentsOf: encodedData)
