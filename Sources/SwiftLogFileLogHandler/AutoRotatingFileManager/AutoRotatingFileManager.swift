@@ -80,6 +80,15 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         }
     }
     
+    /// Option: whether to register crash handlers automatically
+    internal var shouldRegisterCrashHandlers: Bool = false {
+        didSet {
+            if shouldRegisterCrashHandlers {
+                registerCrashHandlers()
+            }
+        }
+    }
+    
     private var fileManagerQueue = DispatchQueue(label: "com.tech-artists.AutoRotatingFileManager.queue")
     
     /// A custom date formatter object to use as the suffix of rotated log files
@@ -129,10 +138,12 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     // MARK: - Life Cycle
     public init(
         maxLogFileSize: UInt64 = autoRotatingFileDefaultMaxFileSize,
-        maxLogFilesCount: UInt64 = 10
+        maxLogFilesCount: UInt64 = 10,
+        enableCrashHandling: Bool = false
     ) {
         self.maxLogFileSize = maxLogFileSize < 1 ? .max : maxLogFileSize
         self.maxLogFilesCount = maxLogFilesCount
+        self.shouldRegisterCrashHandlers = enableCrashHandling
         self.currentLogFileURL = Self.defaultLogFolderURL.appendingPathComponent("\(baseFileName).\(fileExtension)")
         self.stashedLogsFolderURL = determineStashedLogsFolderURL(currentLogFileURL)
         self.openFile()
@@ -143,6 +154,10 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         
         if shouldRotateCurrentLogFile() {
             rotateCurrentLogFile()
+        }
+        
+        if enableCrashHandling {
+            registerCrashHandlers()
         }
     }
     
@@ -175,6 +190,27 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
     }
     
     // MARK: - Public Methods
+    
+    /// Registers crash handlers to automatically log crash information to the log file
+    /// 
+    /// Note: In debug mode with Xcode attached, some crashes (like fatalError) may not trigger
+    /// the handlers as Xcode's debugger intercepts them first. Test crash handling in Release
+    /// builds or run without the debugger attached.
+    /// 
+    /// This crash handler is designed to work alongside other crash reporting services like
+    /// Firebase Crashlytics. The crash information is logged, then control is passed to other
+    /// handlers or the system default crash behavior.
+    public func registerCrashHandlers() {
+        CrashHandler.shared.register { [weak self] crashInfo in
+            guard let self = self else { return }
+            
+            self.fileManagerQueue.sync {
+                self.writeCrashSync(message: crashInfo)
+            }
+            logger.info("Crash information written to log file")
+        }
+        logger.info("Crash handlers registered for AutoRotatingFileManager")
+    }
     
     public func logToFile(_ message: String) {
         fileManagerQueue.async {
@@ -327,6 +363,12 @@ public final class AutoRotatingFileManager: @unchecked Sendable {
         if shouldRotateCurrentLogFile() {
             rotateCurrentLogFile()
         }
+    }
+    
+    /// Write crash information synchronously to ensure it's captured before app termination
+    internal func writeCrashSync(message: String) {
+        write(message: message)
+        logFileHandle?.synchronizeFile()
     }
     
     /// Get the URLs of the stashed log files.
